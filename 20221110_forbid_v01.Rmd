@@ -1,0 +1,323 @@
+---
+title: "Forecasting Demand v.01"
+author: "Arif P. Sulistiono / @arifpras"
+date: "2022-11-10"
+output: html_document
+---
+
+```{r prerequisites, include=FALSE}
+# From {usethis} to avoid loading a massive .RData file
+usethis::use_blank_slate(scope = c("user", "project"))
+
+# Removes all items in Environment!
+rm(list = ls())
+ls()
+
+# Load packages
+pacman::p_load(tidyverse, seasonal, fpp2)
+
+#DescTools for "Winsorize"-ing
+
+options(tz = "Asia/Jakarta")
+
+# https://www.kaggle.com/code/brwalk/an-introduction-to-time-series-forecasting-in-r
+```
+
+```{r working-dir, include=FALSE}
+setwd("~/Dropbox/01_Kemenkeu/2022_11/PotensiDemand")
+```
+
+```{r themes}
+theme_aps01 <-
+  theme(
+    plot.title = element_text(hjust = 0, size = 10, face = "plain"),
+    plot.subtitle = element_text(hjust = 0, size = 9),
+    plot.caption = element_text(hjust = 0, size = 7),
+    axis.title.y = element_text(size = 8),
+    axis.text.y = element_text(size = 8),
+    axis.text.x = element_text(size = 8),
+    strip.text.x = element_text(size = 10),
+    panel.grid.major = element_blank(),
+    panel.ontop = FALSE,
+    legend.position = "none",
+    plot.title.position = "plot",
+    plot.caption.position =  "plot",
+    plot.margin = margin(10, 10, 10, 10)
+  )
+
+theme_aps02 <-
+  theme(
+    plot.title = element_text(hjust = 0, size = 14, face = "bold"),
+    plot.subtitle = element_text(hjust = 0, size = 10),
+    plot.caption = element_text(hjust = 0, size = 8),
+    axis.title.y = element_text(size = 9),
+    axis.title.x = element_text(size = 9),
+    axis.text.y = element_text(size = 8),
+    axis.text.x = element_text(size = 8),
+    strip.text.x = element_text(size = 8),
+    panel.grid.major = element_blank(),
+    panel.ontop = FALSE,
+    legend.position = "none",
+    plot.title.position = "plot",
+    plot.caption.position =  "plot",
+    plot.margin = margin(10, 10, 10, 10)
+  )
+
+theme_aps03 <-
+  theme(
+    plot.title = element_text(hjust = 0, size = 12, face = "bold"),
+    plot.subtitle = element_text(hjust = 0, size = 8),
+    plot.caption = element_text(hjust = 0, size = 6),
+    axis.title.y = element_text(size = 7),
+    axis.title.x = element_text(size = 7),
+    axis.text.y = element_text(size = 6),
+    axis.text.x = element_text(size = 6),
+    strip.text.x = element_text(size = 6),
+    panel.grid.major = element_blank(),
+    panel.ontop = FALSE,
+    legend.position = "none",
+    plot.title.position = "plot",
+    plot.caption.position =  "plot",
+    plot.margin = margin(10, 10, 10, 10)
+  )
+
+theme_aps04 <-
+  theme(
+    plot.title = element_text(hjust = 0, size = 18, face = "bold"),
+    plot.subtitle = element_text(hjust = 0, size = 14),
+    plot.caption = element_text(hjust = 0, size = 12),
+    axis.title.y = element_text(size = 13),
+    axis.title.x = element_text(size = 13),
+    axis.text.y = element_text(size = 12),
+    axis.text.x = element_text(size = 12),
+    strip.text.x = element_text(size = 12),
+    panel.grid.major = element_blank(),
+    panel.ontop = FALSE,
+    legend.position = "none",
+    plot.title.position = "plot",
+    plot.caption.position =  "plot",
+    plot.margin = margin(10, 10, 10, 10)
+  )
+
+theme_aps05 <-
+    theme(
+      axis.text.x = element_text(size = 14),
+      axis.ticks.x = element_blank(),
+      axis.line.x = element_blank(),
+      axis.title.x = element_text(size = 13),
+      axis.line.y = element_blank(),
+      axis.title.y = element_text(size = 13),
+      axis.text.y = element_text(size = 14),
+      plot.title.position = "plot",
+      plot.caption.position =  "plot",
+      legend.title = element_text(size = 13),
+      legend.text = element_text(size = 12),
+      legend.key.size = unit(0.5, 'cm'),
+      legend.spacing = unit(2, 'cm'),
+      plot.title = element_text(hjust = 0, size = 20,
+                                face = "bold"),
+      plot.subtitle = element_text(hjust = 0, size = 19),
+      plot.caption = element_text(hjust = 0, size = 11,),
+      #legend.title = element_blank(),
+      legend.position = "top",
+      strip.text.x = element_text(size = 15),
+      panel.grid.major.y = element_line(colour = "grey97"),
+      panel.ontop = FALSE,
+      plot.margin = margin(10, 10, 10, 10)
+    )
+
+theme_aps06 <-
+  theme(
+    plot.title = element_text(hjust = 0, size = 12, face = "bold"),
+    plot.subtitle = element_text(hjust = 0, size = 10),
+    plot.caption = element_text(hjust = 0, size = 8),
+    axis.title.y = element_text(size = 9),
+    axis.title.x = element_text(size = 9),
+    axis.text.y = element_text(size = 8),
+    axis.text.x = element_text(size = 8),
+    strip.text.x = element_text(size = 8),
+    panel.grid.major = element_blank(),
+    panel.ontop = FALSE,
+    legend.position = "bottom",
+    plot.title.position = "plot",
+    plot.caption.position =  "plot",
+    plot.margin = margin(10, 10, 0, 10)
+  )
+```
+
+
+```{r load}
+db01 <-
+  read_excel(
+    "20221108_database.xlsx",
+    sheet = "db00",
+    col_types = c("date", "numeric", "numeric", "numeric", "numeric")
+  ) %>% 
+  select(-bid_10e6, -dpk_10e12, -vix_index) %>% 
+  glimpse()
+```
+
+```{r time_series}
+(db02 <- ts(db01$bid_10e12))
+```
+
+```{r update_ts}
+(db03 <- ts(db01$bid_10e12, frequency = 12, start = 2016))
+```
+
+# Forecasting Method 1: Exponential Smoothing
+
+```{r autoplot}
+(plot01 <- autoplot(db03, main = "Government Debt Securities' demand: Jan. 2016-Oct. 2022") + theme_light() + theme_aps02)
+```
+
+```{r seasonal_plot}
+(plot02 <- ggseasonplot(db03, main = "Seasonal Plot: Government Debt Securities' demand") + theme_light() + theme_aps02)
+
+```
+
+```{r decompose}
+# db04 <- decomposed_sales_additive <- decompose(db03, type = "additive")
+
+db04 <- decomposed_sales_additive <- decompose(db03, type = "multiplicative")
+(plot03 <- autoplot(db04)+ theme_light() + theme_aps02)
+```
+
+```{r ses_method}
+(plot04 <- autoplot(ses(db03), PI = FALSE) + theme_light() + theme_aps02)
+```
+
+```{r holt_method}
+(plot05 <-
+   (autoplot(holt(db03), PI = FALSE) + theme_light() + theme_aps02))
+
+```
+
+```{r holt_dampened}
+(plot06 <-
+   autoplot(holt(db03, damped = TRUE, h = 14), PI = FALSE) + theme_light() + theme_aps02)
+```
+
+```{r ets_method}
+(plot07 <-
+   autoplot(forecast(ets(db03), h = 14, PI = FALSE)) + 
+   theme_light() + theme_aps02) 
+```
+
+```{r decompose_ets}
+(
+  plot08 <- autoplot(ets(db03)) + theme_light() + theme_aps02
+)
+```
+
+```{r summary_ets}
+summary(ets(db03))
+```
+
+# Forecasting Method 2: Autoregression
+
+```{r autoreg_plot}
+(
+  plot09 <- ggAcf(db03) + theme_light() + theme_aps02
+)
+```
+
+```{r autoreg_db03}
+autoregression_db03 <- ar(db03)
+autoregression_db03
+```
+
+The ar() has recommended we use an order of 12 Meaning we use the previous 12 values to predict the next one. The coefficients are also shown to us.
+
+```{r ar_forecast}
+(plot10 <-
+   autoplot(forecast(
+     autoregression_db03, level = 0, h = 14
+   )) + theme_light() + theme_aps02)
+
+# level = 0 prevents a confidence interval from being generated
+```
+
+```{r decomposed_db03}
+decomposed_db03 <- seas(db03) 
+# time series decomposition
+
+decomposed_db03 <-
+  data.frame(decomposed_db03$data) 
+# makes a data frame out of the output of seas() which is not a data frame
+
+time_series_db03_trend <-
+  ts(decomposed_db03$trend,
+     frequency = 12,
+     start = 2016) 
+# turn the trend into a time series
+
+ar_forecast <-
+  forecast(ar(time_series_db03_trend), h = 14) 
+# forecast the trend
+```
+
+```{r ar_forecast_plot}
+(
+  plot11 <-
+    autoplot(db03) + 
+    autolayer(ar_forecast$mean * tail(decomposed_db03$seasonal, 14), 
+              color = "blue") + 
+    theme_light() + theme_aps02
+)
+# ar_forecast$mean gives us our forecast
+
+# We multiply by the last 12 seasonal factors to resesonalize, using tail
+# Use tail() to select the last values of something, passing in 12 to give us the most recent seasonal factors. tail() works like head()
+
+# autolayer() adds another series to a plot
+```
+
+# Forecasting Method 3: ARIMA
+
+```{r arima01}
+(
+  plot12 <- autoplot(decompose(db03)) + theme_light() + theme_aps02
+)
+```
+
+```{r arima02}
+(plot13 <-
+   autoplot(forecast(Arima(db03, order = c(
+     1, 1, 1
+   )), h = 14), PI = FALSE) + theme_light() + theme_aps02)
+```
+
+```{r arima_plot}
+(plot14 <-
+   autoplot(forecast(auto.arima(db03), h = 14), PI = FALSE) + theme_light() + theme_aps02)
+```
+
+# Forecasting Method 4: Regression
+
+```{r db_regress}
+db05 <-
+  read_excel(
+    "20221108_database.xlsx",
+    sheet = "db00",
+    col_types = c("date", "numeric", "numeric", "numeric", "numeric")
+  ) %>% 
+  select(-bid_10e6) %>% 
+  mutate(
+    month = as.Date(month, "%Y-%m-%d")
+  ) %>% 
+  glimpse()
+```
+
+```{r ts_regress}
+lm01 <- lm(bid_10e12 ~ lag(dpk_10e12, n = 1L), data = db05)
+
+summary(lm01)
+```
+
+```{r cleaning}
+# Removes all items in Environment!
+rm(list = ls())
+ls()
+```
+
