@@ -14,7 +14,9 @@ rm(list = ls())
 ls()
 
 # Load packages
-pacman::p_load(tidyverse, seasonal, fpp2, readxl, feasts)
+pacman::p_load(tidyverse, seasonal, fpp2, readxl, feasts, devtools)
+devtools::source_url("https://raw.githubusercontent.com/arifpras/themesAPS/main/themesAPS?raw=TRUE")
+
 
 #DescTools for "Winsorize"-ing
 
