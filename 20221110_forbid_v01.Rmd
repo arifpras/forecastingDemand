@@ -14,7 +14,7 @@ rm(list = ls())
 ls()
 
 # Load packages
-pacman::p_load(tidyverse, seasonal, fpp2)
+pacman::p_load(tidyverse, seasonal, fpp2, readxl, feasts)
 
 #DescTools for "Winsorize"-ing
 
@@ -24,7 +24,7 @@ options(tz = "Asia/Jakarta")
 ```
 
 ```{r working-dir, include=FALSE}
-setwd("~/Dropbox/01_Kemenkeu/2022_11/PotensiDemand")
+setwd("~/Dropbox/01_Kemenkeu/2022_11/forecastingDemand")
 ```
 
 ```{r themes}
@@ -196,6 +196,11 @@ db04 <- decomposed_sales_additive <- decompose(db03, type = "multiplicative")
 ```{r holt_dampened}
 (plot06 <-
    autoplot(holt(db03, damped = TRUE, h = 14), PI = FALSE) + theme_light() + theme_aps02)
+```
+
+```{r guererro}
+db03lambda <- db01 %>% features(bid_10e12, features = guererro) %>% 
+  pull(lambda_guerrero)
 ```
 
 ```{r ets_method}
