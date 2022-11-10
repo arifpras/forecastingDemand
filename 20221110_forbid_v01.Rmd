@@ -17,9 +17,6 @@ ls()
 pacman::p_load(tidyverse, seasonal, fpp2, readxl, feasts, devtools)
 devtools::source_url("https://raw.githubusercontent.com/arifpras/themesAPS/main/themesAPS?raw=TRUE")
 
-
-#DescTools for "Winsorize"-ing
-
 options(tz = "Asia/Jakarta")
 
 # https://www.kaggle.com/code/brwalk/an-introduction-to-time-series-forecasting-in-r
@@ -322,7 +319,7 @@ lm01 <- lm(bid_10e12 ~ lag(dpk_10e12, n = 1L), data = db05)
 summary(lm01)
 ```
 
-```{r cleaning}
+```{r cleaning, include=FALSE}
 # Removes all items in Environment!
 rm(list = ls())
 ls()
