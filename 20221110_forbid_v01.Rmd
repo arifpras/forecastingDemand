@@ -14,136 +14,18 @@ rm(list = ls())
 ls()
 
 # Load packages
-pacman::p_load(tidyverse, seasonal, fpp2, readxl, feasts, devtools)
+pacman::p_load(tidyverse, seasonal, fpp2, readxl, feasts, devtools, tsibble)
 devtools::source_url("https://raw.githubusercontent.com/arifpras/themesAPS/main/themesAPS?raw=TRUE")
 
 options(tz = "Asia/Jakarta")
 
 # https://www.kaggle.com/code/brwalk/an-introduction-to-time-series-forecasting-in-r
+# https://www.mitchelloharawild.com/blog/feasts/
 ```
 
 ```{r working-dir, include=FALSE}
 setwd("~/Dropbox/01_Kemenkeu/2022_11/forecastingDemand")
 ```
-
-```{r themes}
-theme_aps01 <-
-  theme(
-    plot.title = element_text(hjust = 0, size = 10, face = "plain"),
-    plot.subtitle = element_text(hjust = 0, size = 9),
-    plot.caption = element_text(hjust = 0, size = 7),
-    axis.title.y = element_text(size = 8),
-    axis.text.y = element_text(size = 8),
-    axis.text.x = element_text(size = 8),
-    strip.text.x = element_text(size = 10),
-    panel.grid.major = element_blank(),
-    panel.ontop = FALSE,
-    legend.position = "none",
-    plot.title.position = "plot",
-    plot.caption.position =  "plot",
-    plot.margin = margin(10, 10, 10, 10)
-  )
-
-theme_aps02 <-
-  theme(
-    plot.title = element_text(hjust = 0, size = 14, face = "bold"),
-    plot.subtitle = element_text(hjust = 0, size = 10),
-    plot.caption = element_text(hjust = 0, size = 8),
-    axis.title.y = element_text(size = 9),
-    axis.title.x = element_text(size = 9),
-    axis.text.y = element_text(size = 8),
-    axis.text.x = element_text(size = 8),
-    strip.text.x = element_text(size = 8),
-    panel.grid.major = element_blank(),
-    panel.ontop = FALSE,
-    legend.position = "none",
-    plot.title.position = "plot",
-    plot.caption.position =  "plot",
-    plot.margin = margin(10, 10, 10, 10)
-  )
-
-theme_aps03 <-
-  theme(
-    plot.title = element_text(hjust = 0, size = 12, face = "bold"),
-    plot.subtitle = element_text(hjust = 0, size = 8),
-    plot.caption = element_text(hjust = 0, size = 6),
-    axis.title.y = element_text(size = 7),
-    axis.title.x = element_text(size = 7),
-    axis.text.y = element_text(size = 6),
-    axis.text.x = element_text(size = 6),
-    strip.text.x = element_text(size = 6),
-    panel.grid.major = element_blank(),
-    panel.ontop = FALSE,
-    legend.position = "none",
-    plot.title.position = "plot",
-    plot.caption.position =  "plot",
-    plot.margin = margin(10, 10, 10, 10)
-  )
-
-theme_aps04 <-
-  theme(
-    plot.title = element_text(hjust = 0, size = 18, face = "bold"),
-    plot.subtitle = element_text(hjust = 0, size = 14),
-    plot.caption = element_text(hjust = 0, size = 12),
-    axis.title.y = element_text(size = 13),
-    axis.title.x = element_text(size = 13),
-    axis.text.y = element_text(size = 12),
-    axis.text.x = element_text(size = 12),
-    strip.text.x = element_text(size = 12),
-    panel.grid.major = element_blank(),
-    panel.ontop = FALSE,
-    legend.position = "none",
-    plot.title.position = "plot",
-    plot.caption.position =  "plot",
-    plot.margin = margin(10, 10, 10, 10)
-  )
-
-theme_aps05 <-
-    theme(
-      axis.text.x = element_text(size = 14),
-      axis.ticks.x = element_blank(),
-      axis.line.x = element_blank(),
-      axis.title.x = element_text(size = 13),
-      axis.line.y = element_blank(),
-      axis.title.y = element_text(size = 13),
-      axis.text.y = element_text(size = 14),
-      plot.title.position = "plot",
-      plot.caption.position =  "plot",
-      legend.title = element_text(size = 13),
-      legend.text = element_text(size = 12),
-      legend.key.size = unit(0.5, 'cm'),
-      legend.spacing = unit(2, 'cm'),
-      plot.title = element_text(hjust = 0, size = 20,
-                                face = "bold"),
-      plot.subtitle = element_text(hjust = 0, size = 19),
-      plot.caption = element_text(hjust = 0, size = 11,),
-      #legend.title = element_blank(),
-      legend.position = "top",
-      strip.text.x = element_text(size = 15),
-      panel.grid.major.y = element_line(colour = "grey97"),
-      panel.ontop = FALSE,
-      plot.margin = margin(10, 10, 10, 10)
-    )
-
-theme_aps06 <-
-  theme(
-    plot.title = element_text(hjust = 0, size = 12, face = "bold"),
-    plot.subtitle = element_text(hjust = 0, size = 10),
-    plot.caption = element_text(hjust = 0, size = 8),
-    axis.title.y = element_text(size = 9),
-    axis.title.x = element_text(size = 9),
-    axis.text.y = element_text(size = 8),
-    axis.text.x = element_text(size = 8),
-    strip.text.x = element_text(size = 8),
-    panel.grid.major = element_blank(),
-    panel.ontop = FALSE,
-    legend.position = "bottom",
-    plot.title.position = "plot",
-    plot.caption.position =  "plot",
-    plot.margin = margin(10, 10, 0, 10)
-  )
-```
-
 
 ```{r load}
 db01 <-
@@ -161,26 +43,52 @@ db01 <-
 ```
 
 ```{r update_ts}
+# convert as time series
 (db03 <- ts(db01$bid_10e12, frequency = 12, start = 2016))
+
+# convert as tsibble
+(db03_tsbl <- as_tsibble(db03, key = bid_10e12, index = month))
 ```
 
 # Forecasting Method 1: Exponential Smoothing
 
 ```{r autoplot}
 (plot01 <- autoplot(db03, main = "Government Debt Securities' demand: Jan. 2016-Oct. 2022") + theme_light() + theme_aps02)
+
+# tsibble plot
+(plot01_tsbl <-
+    db03_tsbl %>% autoplot(value) + theme_light() + theme_aps02)
 ```
 
 ```{r seasonal_plot}
 (plot02 <- ggseasonplot(db03, main = "Seasonal Plot: Government Debt Securities' demand") + theme_light() + theme_aps02)
 
+#tsibble
+# (db03_tsbl %>% gg_season(value) + theme_light() + theme_aps02)
+db03_tsbl %>% gg_subseries(value) + theme_light() + theme_aps02
 ```
 
-```{r decompose}
-# db04 <- decomposed_sales_additive <- decompose(db03, type = "additive")
+```{r additive}
+db04a <- decomposed_sales_additive <- decompose(db03, type = "additive")
 
-db04 <- decomposed_sales_additive <- decompose(db03, type = "multiplicative")
-(plot03 <- autoplot(db04)+ theme_light() + theme_aps02)
+(plot03a <- autoplot(db04a)+ theme_light() + theme_aps02)
 ```
+
+```{r multiplicative}
+db04b <- decomposed_sales_additive <- decompose(db03, type = "multiplicative")
+
+(plot03b <- autoplot(db04b)+ theme_light() + theme_aps02)
+```
+
+Types of seasonal decompositions
+
+-   Additive Seasonal Decomposition: Each season gets moved by a constant number that is added or subtracted from the trend (e.g. subtract \$100 to sales of swimsuits in December)
+
+-   Multiplicative Seasonal Decomposition: Each season has a number we multiply to the trend (e.g. We multiply swimsuit sales by 1.2 in July)
+
+If we know that seasonal affects do not change over time an additive, then an additive decomposition is great. When the seasonal affects grow with the trend, a multiplicative decomposition is better. If you notice the residuals in your additive model are very large when the trend is at a low or high, you may want to switch to a multiplicative model.
+
+Why is the additive selected? Because usually there is no issuance in December, so the trend needs to be subtracted.
 
 ```{r ses_method}
 (plot04 <- autoplot(ses(db03), PI = FALSE) + theme_light() + theme_aps02)
@@ -190,6 +98,9 @@ db04 <- decomposed_sales_additive <- decompose(db03, type = "multiplicative")
 (plot05 <-
    (autoplot(holt(db03), PI = FALSE) + theme_light() + theme_aps02))
 
+plot05_build <- ggplot_build(plot05) # extracting the data from plot05, sublists: data [1] raw; [2] forecasting
+# layer_data(plot05, 1)
+plot05_build$data
 ```
 
 ```{r holt_dampened}
@@ -198,7 +109,8 @@ db04 <- decomposed_sales_additive <- decompose(db03, type = "multiplicative")
 ```
 
 ```{r guererro}
-db03lambda <- db01 %>% features(bid_10e12, features = guererro) %>% 
+db03lambda <-
+  db03_tsbl %>% features(value, features = "guererro") %>% 
   pull(lambda_guerrero)
 ```
 
@@ -209,9 +121,7 @@ db03lambda <- db01 %>% features(bid_10e12, features = guererro) %>%
 ```
 
 ```{r decompose_ets}
-(
-  plot08 <- autoplot(ets(db03)) + theme_light() + theme_aps02
-)
+(plot08 <- autoplot(ets(db03)) + theme_light() + theme_aps02)
 ```
 
 ```{r summary_ets}
@@ -221,9 +131,7 @@ summary(ets(db03))
 # Forecasting Method 2: Autoregression
 
 ```{r autoreg_plot}
-(
-  plot09 <- ggAcf(db03) + theme_light() + theme_aps02
-)
+(plot09 <- ggAcf(db03) + theme_light() + theme_aps02)
 ```
 
 ```{r autoreg_db03}
@@ -264,9 +172,9 @@ ar_forecast <-
 ```{r ar_forecast_plot}
 (
   plot11 <-
-    autoplot(db03) + 
-    autolayer(ar_forecast$mean * tail(decomposed_db03$seasonal, 14), 
-              color = "blue") + 
+    autoplot(db03) +
+    autolayer(ar_forecast$mean * tail(decomposed_db03$seasonal, 14),
+              color = "blue") +
     theme_light() + theme_aps02
 )
 # ar_forecast$mean gives us our forecast
@@ -280,9 +188,7 @@ ar_forecast <-
 # Forecasting Method 3: ARIMA
 
 ```{r arima01}
-(
-  plot12 <- autoplot(decompose(db03)) + theme_light() + theme_aps02
-)
+(plot12 <- autoplot(decompose(db03)) + theme_light() + theme_aps02)
 ```
 
 ```{r arima02}
@@ -324,4 +230,3 @@ summary(lm01)
 rm(list = ls())
 ls()
 ```
-
