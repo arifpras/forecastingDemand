@@ -1,6 +1,8 @@
 # forecastingDemand
 
-This repository will be used to forecast Indonesian's government bonds' demand for the next financial year; limited to the type which is tradable conventional bonds, benchmark series & treasury-bills (less than 1 year), and based on issuance data in the primary market.
+This repository will be used to forecast Indonesian's government bonds' demands for the next financial year based on the issuance datasets in the primary market from 2009 to Oct. 2022. The datasets are explained as follows. 
+- 20221108_database: Tradable conventional bonds, and benchmark series & treasury-bills (less than 1 year);
+- 20221111_database: All bonds.
 
 Some useful links:
 - An Introduction to Time Series Forecasting in R: https://www.kaggle.com/code/brwalk/an-introduction-to-time-series-forecasting-in-r
