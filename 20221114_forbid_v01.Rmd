@@ -1,0 +1,221 @@
+---
+title: "Forecasting Demand v.01"
+author: "Arif P. Sulistiono / @arifpras"
+date: "2022-11-14"
+output: html_document
+---
+
+```{r prerequisites, include=FALSE}
+# From {usethis} to avoid loading a massive .RData file
+usethis::use_blank_slate(scope = c("user", "project"))
+
+# Removes all items in Environment!
+rm(list = ls())
+ls()
+
+# Load packages
+pacman::p_load(tidyverse, seasonal, fpp2, readxl, devtools)
+
+# My ggplot's themes
+devtools::source_url("https://raw.githubusercontent.com/arifpras/themesAPS/main/themesAPS?raw=TRUE")
+
+options(tz = "Asia/Jakarta")
+
+# https://www.kaggle.com/code/brwalk/an-introduction-to-time-series-forecasting-in-r
+# https://www.mitchelloharawild.com/blog/feasts/
+```
+
+```{r working-dir, include=FALSE}
+setwd("~/Dropbox/01_Kemenkeu/2022_11/forecastingDemand")
+```
+
+```{r load}
+db01 <- read_excel(
+  "20221114_database.xlsx",
+  sheet = "db02",
+  col_types = c("date",
+                "numeric")
+) %>%
+  glimpse()
+```
+
+```{r time_series}
+(db02 <- ts(db01$Bid10e11))
+```
+
+```{r update_ts}
+# convert as time series
+(db03 <- ts(db01$Bid10e11, frequency = 12, start = 2009))
+
+# convert as tsibble
+# (db03_tsbl <- as_tsibble(db03, key = bid_10e12, index = month))
+```
+
+# Forecasting Method 1: Exponential Smoothing
+
+```{r autoplot}
+(plot01 <- autoplot(db03, main = "Government Debt Securities' demand: Jan. 2009-Oct. 2022") + theme_light() + theme_aps02)
+
+# tsibble plot
+# (plot01_tsbl <-
+#     db03_tsbl %>% autoplot(value) + theme_light() + theme_aps02)
+```
+
+```{r seasonal_plot}
+(plot02 <- ggseasonplot(db03, main = "Seasonal Plot: Government Debt Securities' demand") + theme_light() + theme_aps02)
+
+#tsibble
+# (db03_tsbl %>% gg_season(value) + theme_light() + theme_aps02)
+# db03_tsbl %>% gg_subseries(value) + theme_light() + theme_aps02
+```
+
+```{r additive}
+db04a <- decomposed_sales_additive <- decompose(db03, type = "additive")
+
+(plot03a <- autoplot(db04a)+ theme_light() + theme_aps02)
+```
+
+```{r multiplicative}
+db04b <- decomposed_sales_additive <- decompose(db03, type = "multiplicative")
+
+(plot03b <- autoplot(db04b)+ theme_light() + theme_aps02)
+```
+
+Types of seasonal decompositions
+
+-   Additive Seasonal Decomposition: Each season gets moved by a constant number that is added or subtracted from the trend (e.g. subtract \$100 to sales of swimsuits in December)
+
+-   Multiplicative Seasonal Decomposition: Each season has a number we multiply to the trend (e.g. We multiply swimsuit sales by 1.2 in July)
+
+If we know that seasonal affects do not change over time an additive, then an additive decomposition is great. When the seasonal affects grow with the trend, a multiplicative decomposition is better. If you notice the residuals in your additive model are very large when the trend is at a low or high, you may want to switch to a multiplicative model.
+
+Why is the additive selected? Because usually there is no issuance in December, so the trend needs to be subtracted.
+
+```{r ses_method}
+(plot04 <- autoplot(ses(db03), PI = FALSE) + theme_light() + theme_aps02)
+```
+
+```{r holt_method}
+(plot05 <-
+   (autoplot(holt(db03), PI = FALSE) + theme_light() + theme_aps02))
+
+plot05_build <- ggplot_build(plot05) # extracting the data from plot05, sublists: data [1] raw; [2] forecasting
+# layer_data(plot05, 1)
+plot05_build$data
+```
+
+```{r holt_dampened}
+(plot06 <-
+   autoplot(holt(db03, damped = TRUE, h = 14), PI = FALSE) + theme_light() + theme_aps02)
+```
+
+```{r guererro, eval=FALSE, include=FALSE}
+# db03lambda <-
+#   db03_tsbl %>% features(value, features = "guererro") %>% 
+#   pull(lambda_guerrero)
+```
+
+```{r ets_method}
+pacman::p_load(tsibble, fable)
+
+db03 %>%
+  as_tsibble() %>%
+  model(ETS(value)) %>%
+  forecast(h = 14)
+
+(
+  db01 %>%
+    mutate(mnth = yearmonth(IssuanceDt)) %>%
+    as_tsibble(index = mnth) %>%
+    select(-IssuanceDt) %>%
+    model(ETS(Bid10e11)) %>% 
+    forecast(h = 14) %>% 
+    autoplot()
+)
+
+(plot07 <-
+   autoplot(forecast::forecast(ets(db03), h = 14, PI = FALSE)) + 
+   theme_light() + theme_aps02) 
+```
+
+```{r decompose_ets}
+(plot08 <- autoplot(ets(db03)) + theme_light() + theme_aps02)
+```
+
+```{r summary_ets}
+summary(ets(db03))
+```
+
+# Forecasting Method 2: Autoregression
+
+```{r autoreg_plot}
+(plot09 <- ggAcf(db03) + theme_light() + theme_aps02)
+```
+
+```{r autoreg_db03}
+autoregression_db03 <- ar(db03)
+autoregression_db03
+```
+
+The ar() has recommended we use an order of 12 Meaning we use the previous 12 values to predict the next one. The coefficients are also shown to us.
+
+```{r ar_forecast}
+(plot10 <-
+   autoplot(forecast::forecast(
+     autoregression_db03, level = 0, h = 14
+   )) + theme_light() + theme_aps02)
+
+# level = 0 prevents a confidence interval from being generated
+```
+
+```{r decomposed_db03}
+decomposed_db03 <- seas(db03) 
+# time series decomposition
+
+decomposed_db03 <-
+  data.frame(decomposed_db03$data) 
+# makes a data frame out of the output of seas() which is not a data frame
+
+time_series_db03_trend <-
+  ts(decomposed_db03$trend,
+     frequency = 12,
+     start = 2016) 
+# turn the trend into a time series
+
+ar_forecast <-
+  forecast::forecast(ar(time_series_db03_trend), h = 14) 
+# forecast the trend
+```
+
+```{r ar_forecast_plot}
+(
+  plot11 <-
+    autoplot(db03) +
+    autolayer(ar_forecast$mean * tail(decomposed_db03$seasonal, 14),
+              color = "blue") +
+    theme_light() + theme_aps02
+)
+# ar_forecast$mean gives us our forecast
+
+# We multiply by the last 12 seasonal factors to resesonalize, using tail
+# Use tail() to select the last values of something, passing in 12 to give us the most recent seasonal factors. tail() works like head()
+
+# autolayer() adds another series to a plot
+```
+
+# Forecasting Method 3: ARIMA
+
+```{r arima01}
+(plot12 <- autoplot(decompose(db03)) + theme_light() + theme_aps02)
+```
+
+```{r arima_plot}
+(plot14 <-
+   autoplot(forecast::forecast(auto.arima(db03), h = 14), PI = FALSE) + theme_light() + theme_aps02)
+```
+
+```{r cleaning, include=FALSE}
+# Removes all items in Environment!
+rm(list = ls())
+ls()
+```

@@ -1,0 +1,115 @@
+---
+title: "Forecasting Demand v.02"
+author: "Arif P. Sulistiono / @arifpras"
+date: "2022-11-14"
+output: html_document
+---
+
+```{r prerequisites, include=FALSE}
+# From {usethis} to avoid loading a massive .RData file
+usethis::use_blank_slate(scope = c("user", "project"))
+
+# Removes all items in Environment!
+rm(list = ls())
+ls()
+
+# Load packages
+pacman::p_load(tidyverse, seasonal, fpp2, readxl, devtools, feasts)
+
+# My ggplot's themes
+devtools::source_url("https://raw.githubusercontent.com/arifpras/themesAPS/main/themesAPS?raw=TRUE")
+
+options(tz = "Asia/Jakarta")
+
+# https://www.kaggle.com/code/brwalk/an-introduction-to-time-series-forecasting-in-r
+# https://www.mitchelloharawild.com/blog/feasts/
+```
+
+```{r working-dir, include=FALSE}
+setwd("~/Dropbox/01_Kemenkeu/2022_11/forecastingDemand")
+```
+
+```{r load}
+db01 <- read_excel(
+  "20221114_database.xlsx",
+  sheet = "db02",
+  col_types = c("date",
+                "numeric")
+)
+
+db02 <- db01 %>%
+  mutate(mnth = yearmonth(IssuanceDt)) %>%
+  as_tsibble(index = mnth) %>%
+  select(-IssuanceDt)
+```
+
+```{r tsibble}
+(plot01 <- db02 %>%
+   autoplot() +
+   theme_light() + theme_aps02 +
+   labs(x = ""))
+```
+
+```{r gg_season}
+(
+  plot02 <-
+    db02 %>% gg_season(Bid10e11) + theme_light() + theme_aps02 +
+    labs(x = "") + theme(legend.position = "bottom")
+)
+```
+
+```{r}
+(plot03 <- db02 %>% gg_subseries(Bid10e11) + theme_light() + theme_aps02 +
+    labs(x = "") + theme(legend.position = "bottom"))
+```
+
+```{r}
+(plot04 <- db02 %>% ACF(Bid10e11) %>% autoplot() + theme_light() + theme_aps02 +
+    labs(x = "") + theme(legend.position = "bottom"))
+```
+
+```{r}
+(plot05 <-
+   db02 %>% gg_lag(Bid10e11, geom = "point") + theme_light() + theme_aps02)
+```
+
+```{r}
+(plot06 <- db02 %>% gg_tsdisplay(Bid10e11))
+```
+
+```{r}
+(
+  plot07 <-
+    db02 %>% model(STL(Bid10e11)) %>% components() %>% autoplot() + theme_light() + theme_aps02
+)
+```
+
+```{r fit}
+# fit <- db02 %>% as_tsibble(index = mnth) %>% model(ETS(Bid10e11))
+# report(fit)
+# components(fit) %>% autoplot()  + theme_light() + theme_aps02
+
+(
+  plot08 <-
+    db02 %>% model(ETS(Bid10e11)) %>% components() %>% autoplot() + theme_light() + theme_aps02
+)
+```
+
+```{r}
+(plot09 <-
+   autoplot(forecast::forecast(ets(
+     ts(db02$Bid10e11, frequency = 12, start = 2009)
+   ), h = 14, PI = FALSE)) +
+   theme_light() + theme_aps02) 
+
+(
+  plot10 <-
+    db02 %>% model(ETS(Bid10e11)) %>% forecast(h = 14) %>% autoplot() + theme_light() + theme_aps02 + labs(x = "")
+)
+
+(db02 %>%
+    as_tsibble() %>%
+    model(ETS(Bid10e11)) %>%
+    forecast(h = 14))
+```
+
