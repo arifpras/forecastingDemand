@@ -14,7 +14,7 @@ rm(list = ls())
 ls()
 
 # Load packages
-pacman::p_load(tidyverse, seasonal, fpp2, readxl, devtools, feasts)
+pacman::p_load(tidyverse, seasonal, fpp2, readxl, devtools, feasts, qpdf)
 
 # My ggplot's themes
 devtools::source_url("https://raw.githubusercontent.com/arifpras/themesAPS/main/themesAPS?raw=TRUE")
@@ -38,7 +38,7 @@ db01 <- read_excel(
 )
 ```
 
-```{r}
+```{r plot_industries}
 db02 <- db01 %>% filter(Bid == "Incoming") %>% 
   mutate(mnth = yearmonth(IssueDt)) %>% 
   select(-IssueDt, -Series, -Nom10e5, -Bid) %>% 
@@ -77,11 +77,10 @@ db02 <- db01 %>% filter(Bid == "Incoming") %>%
 )
 ```
 
-```{r}
+```{r db03}
 db03 <-
   db01 %>% filter(Bid == "Incoming" &
-                    !CatgBidders %in% c("BI") &
-                    IssueDt <= "2022-10-30") %>%
+                    !CatgBidders %in% c("BI")) %>%
   mutate(mnth = yearmonth(IssueDt)) %>%
   group_by(mnth) %>%
   summarise("TotalBid" = sum(Nom10e11)) %>%
@@ -89,7 +88,8 @@ db03 <-
   as_tsibble(index = mnth) %>%
   relocate(mnth, TotalBid) %>% 
   fill_gaps(.full = TRUE) %>% #Dec kadang tdk ada lelang
-  replace(is.na(.), 0) #Fill NA with 0
+  replace(is.na(.), 0) %>% #Fill NA with 0
+  filter_index(~ "2022 Oct") # Max period of observation
 ```
 
 ```{r tsibble}
@@ -107,33 +107,33 @@ db03 <-
 )
 ```
 
-```{r}
+```{r gg_subseries}
 (plot03 <- db03 %>% gg_subseries(TotalBid) + theme_light() + theme_aps02 +
     labs(x = "") + theme(legend.position = "bottom"))
 ```
 
-```{r}
+```{r acf}
 (plot04 <- db03 %>% ACF(TotalBid) %>% autoplot() + theme_light() + theme_aps02 +
     labs(x = "") + theme(legend.position = "bottom"))
 ```
 
-```{r}
+```{r gg_lag}
 (plot05 <-
    db03 %>% gg_lag(TotalBid, geom = "point") + theme_light() + theme_aps02)
 ```
 
-```{r}
+```{r gg_tsdisplay}
 (plot06 <- db03 %>% gg_tsdisplay(TotalBid))
 ```
 
-```{r}
+```{r stl_decompose}
 (
   plot07 <-
     db03 %>% model(STL(TotalBid)) %>% components() %>% autoplot() + theme_light() + theme_aps02
 )
 ```
 
-```{r fit}
+```{r ets_decompose}
 # fit <- db02 %>% as_tsibble(index = mnth) %>% model(ETS(Bid10e11))
 # report(fit)
 # components(fit) %>% autoplot()  + theme_light() + theme_aps02
@@ -144,7 +144,7 @@ db03 <-
 )
 ```
 
-```{r ets}
+```{r ets_forecast}
 # (plot09 <-
 #    autoplot(forecast::forecast(ets(
 #      ts(db02$Bid10e11, frequency = 12, start = 2009)
@@ -156,22 +156,22 @@ db03 <-
     db03 %>% as_tsibble() %>% model(ETS(TotalBid)) %>% forecast(h = 14, PI = FALSE) %>% autoplot(db03) + theme_light() + theme_aps02 + labs(x = "")
 )
 
-(db03 <- db03 %>%
+(db04 <- db03 %>%
     as_tsibble() %>%
     model(ETS(TotalBid)) %>%
     forecast(h = 14))
 ```
 
-```{r}
+```{r ets_plot}
 (
-  db04 <-
-    db03 %>% as_tibble() %>% select(mnth, .mean) %>% mutate(yr = year(mnth)) %>%
+  db05 <-
+    db04 %>% as_tibble() %>% select(mnth, .mean) %>% mutate(yr = year(mnth)) %>%
     group_by(yr) %>% summarise(totl = sum(.mean)) %>% ungroup()
 )
 
 (
   plot11 <-
-    db03 %>% as_tibble() %>% select(mnth, .mean) %>% mutate(yr = year(mnth)) %>%
+    db04 %>% as_tibble() %>% select(mnth, .mean) %>% mutate(yr = year(mnth)) %>%
     ggplot(aes(x = factor(mnth), y = .mean)) +
     geom_col(aes(fill = factor(yr)), alpha = 0.9) +
     geom_text(
@@ -196,17 +196,18 @@ db03 <-
       panel.grid.major.x = element_blank(),
       panel.background = element_blank()
     ) +
+    scale_y_continuous(limits = c(0, 115)) +
     coord_flip() +
     geom_textbox(aes(
-      x = "2023 Dec", y = 95,
-      label = "The ETS model forecasts the total demand for the conventional bonds\\' auctions in the next year is <span style='color:red;'>± IDR902.86 trillion.</span> "),
+      x = "2023 Dec", y = 100,
+      label = "The ETS model forecasts the total demand for the conventional bonds\\' auctions in 2023 is <span style='color:red;'>± IDR983.01 trillion.</span> "),
       # stat = "unique",
       size = 3,
-      width = unit(13, "lines"))
+      width = unit(12, "lines"))
 )
 
 ggsave(
-  filename = "20221115_bidauctions_SUN.pdf",
+  filename = "20221115_bidauctions_SUN_ets.pdf",
   plot = plot11,
   #device = cairo_pdf,
   width = 297,
@@ -215,7 +216,91 @@ ggsave(
 )
 ```
 
-```{r}
+```{r arima_forecast}
+(
+  plot12 <-
+    autoplot(forecast::forecast(
+      auto.arima(ts(
+        db03$TotalBid, frequency = 12, start = 2009
+      )), h = 14
+    )) +
+    theme_light() + theme_aps02 + labs(x = "", y = "TotalBid")
+)
 
+(db06 <- db03 %>%
+    as_tsibble() %>%
+    model(ARIMA(TotalBid)) %>%
+    forecast(h = 14))
+```
+
+```{r arima_plot}
+(
+  db07 <-
+    db06 %>% as_tibble() %>% select(mnth, .mean) %>% mutate(yr = year(mnth)) %>%
+    group_by(yr) %>% summarise(totl = sum(.mean)) %>% ungroup()
+)
+
+(
+  plot13 <-
+    db06 %>% as_tibble() %>% select(mnth, .mean) %>% mutate(yr = year(mnth)) %>%
+    ggplot(aes(x = factor(mnth), y = .mean)) +
+    geom_col(aes(fill = factor(yr)), alpha = 0.9) +
+    geom_text(
+      aes(
+        x = factor(mnth),
+        y = .mean,
+        label = round(.mean, 2)
+      ),
+      size = 3,
+      hjust = 1.5
+    ) +
+    scale_fill_manual(values = wes_palette("FantasticFox1", n = 2)) +
+    # scale_fill_viridis(discrete = TRUE, option = "C") +
+    # scale_fill_calc() +
+    theme_linedraw() +
+    labs(y = "",
+         x = "") +
+    theme(
+      legend.position = "none",
+      panel.grid.minor = element_blank(),
+      panel.grid.major.y = element_line(colour = "gray", linetype = "dotted"),
+      panel.grid.major.x = element_blank(),
+      panel.background = element_blank()
+    ) +
+    scale_y_continuous(limits = c(0, 115)) +
+    coord_flip() +
+    geom_textbox(aes(
+      x = "2023 Dec", y = 100,
+      label = "The ARIMA model forecasts the total demand for the conventional bonds\\' auctions in 2023 is <span style='color:red;'>± IDR860.43 trillion.</span> "),
+      # stat = "unique",
+      size = 3,
+      width = unit(12, "lines"))
+)
+
+ggsave(
+  filename = "20221115_bidauctions_SUN_arima.pdf",
+  plot = plot13,
+  #device = cairo_pdf,
+  width = 297,
+  height = 210,
+  units = "mm"
+)
+```
+
+```{r combine_pdf}
+qpdf::pdf_combine(
+  input = c(
+    "20221115_bidauctions_SUN_ets.pdf",
+    "20221115_bidauctions_SUN_arima.pdf"
+  ),
+  output = "20221115_bidauctions_SUN.pdf"
+)
+```
+
+
+```{r clearing}
+# Removes all items in Environment!
+rm(list = ls())
+ls()
 ```
 
