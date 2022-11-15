@@ -34,18 +34,19 @@ db01 <- read_excel(
   "20221114_database.xlsx",
   sheet = "db02",
   col_types = c("date",
-                "numeric")
+                "numeric", "numeric", "numeric")
 )
 
 db02 <- db01 %>%
   mutate(mnth = yearmonth(IssuanceDt)) %>%
   as_tsibble(index = mnth) %>%
-  select(-IssuanceDt)
+  select(-IssuanceDt, -Year, -Month) %>% 
+  relocate(mnth, Bid10e11)
 ```
 
 ```{r tsibble}
 (plot01 <- db02 %>%
-   autoplot() +
+   autoplot(.vars = Bid10e11) +
    theme_light() + theme_aps02 +
    labs(x = ""))
 ```
@@ -100,16 +101,48 @@ db02 <- db01 %>%
    autoplot(forecast::forecast(ets(
      ts(db02$Bid10e11, frequency = 12, start = 2009)
    ), h = 14, PI = FALSE)) +
-   theme_light() + theme_aps02) 
+   theme_light() + theme_aps02) + labs(x = "", y = "Bid10e11")
 
 (
   plot10 <-
     db02 %>% model(ETS(Bid10e11)) %>% forecast(h = 14) %>% autoplot() + theme_light() + theme_aps02 + labs(x = "")
 )
 
-(db02 %>%
+(db03 <- db02 %>%
     as_tsibble() %>%
     model(ETS(Bid10e11)) %>%
     forecast(h = 14))
+```
+
+```{r}
+# db04 <- db03 %>% as_tibble() %>% select(mnth, .mean) %>% mutate(yr = year(mnth))
+
+(
+  plot11 <-
+    db03 %>% as_tibble() %>% select(mnth, .mean) %>% mutate(yr = year(mnth)) %>%
+    ggplot(aes(x = factor(mnth), y = .mean)) +
+    geom_col(aes(fill = factor(yr)), alpha = 0.35) +
+    geom_text(
+      aes(
+        x = factor(mnth),
+        y = .mean,
+        label = round(.mean, 2)
+      ),
+      size = 3,
+      hjust = 1.5
+    ) +
+    scale_fill_calc() +
+    theme_linedraw() +
+    labs(y = "",
+         x = "") +
+    theme(
+      legend.position = "none",
+      panel.grid.minor = element_blank(),
+      panel.grid.major.y = element_line(colour = "gray", linetype = "dotted"),
+      panel.grid.major.x = element_blank(),
+      panel.background = element_blank()
+    ) +
+    coord_flip()
+)
 ```
 
