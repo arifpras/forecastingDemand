@@ -96,16 +96,16 @@ db02 <- db01 %>%
 )
 ```
 
-```{r}
-(plot09 <-
-   autoplot(forecast::forecast(ets(
-     ts(db02$Bid10e11, frequency = 12, start = 2009)
-   ), h = 14, PI = FALSE)) +
-   theme_light() + theme_aps02) + labs(x = "", y = "Bid10e11")
+```{r ets}
+# (plot09 <-
+#    autoplot(forecast::forecast(ets(
+#      ts(db02$Bid10e11, frequency = 12, start = 2009)
+#    ), h = 14, PI = FALSE)) +
+#    theme_light() + theme_aps02) + labs(x = "", y = "Bid10e11")
 
 (
   plot10 <-
-    db02 %>% model(ETS(Bid10e11)) %>% forecast(h = 14) %>% autoplot() + theme_light() + theme_aps02 + labs(x = "")
+    db02 %>% as_tsibble() %>% model(ETS(Bid10e11)) %>% forecast(h = 14, PI = FALSE) %>% autoplot(db02) + theme_light() + theme_aps02 + labs(x = "")
 )
 
 (db03 <- db02 %>%
@@ -117,11 +117,13 @@ db02 <- db01 %>%
 ```{r}
 # db04 <- db03 %>% as_tibble() %>% select(mnth, .mean) %>% mutate(yr = year(mnth))
 
+db04 %>% group_by(yr) %>% summarise(totl = sum(.mean)) %>% ungroup()
+
 (
   plot11 <-
     db03 %>% as_tibble() %>% select(mnth, .mean) %>% mutate(yr = year(mnth)) %>%
     ggplot(aes(x = factor(mnth), y = .mean)) +
-    geom_col(aes(fill = factor(yr)), alpha = 0.35) +
+    geom_col(aes(fill = factor(yr)), alpha = 0.9) +
     geom_text(
       aes(
         x = factor(mnth),
@@ -131,7 +133,9 @@ db02 <- db01 %>%
       size = 3,
       hjust = 1.5
     ) +
-    scale_fill_calc() +
+    scale_fill_manual(values = wes_palette("FantasticFox1", n = 2)) +
+    # scale_fill_viridis(discrete = TRUE, option = "C") +
+    # scale_fill_calc() +
     theme_linedraw() +
     labs(y = "",
          x = "") +
@@ -142,7 +146,26 @@ db02 <- db01 %>%
       panel.grid.major.x = element_blank(),
       panel.background = element_blank()
     ) +
-    coord_flip()
+    coord_flip() +
+    geom_textbox(aes(
+      x = "2023 Oct", y = 220,
+      label = "The ETS model forecasts the total demand for the government bonds (all series and transactions) in the next year is <span style='color:red;'>± IDR2,067.44 trillion.</span> "),
+      # stat = "unique",
+      size = 3,
+      width = unit(14, "lines"))
 )
+
+ggsave(
+  filename = "20221115_demand.pdf",
+  plot = plot11,
+  #device = cairo_pdf,
+  width = 297,
+  height = 210,
+  units = "mm"
+)
+```
+
+```{r}
+
 ```
 

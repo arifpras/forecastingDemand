@@ -1,0 +1,221 @@
+---
+title: "Forecasting Demand v.03"
+author: "Arif P. Sulistiono / @arifpras"
+date: "2022-11-15"
+output: html_document
+---
+
+```{r prerequisites, include=FALSE}
+# From {usethis} to avoid loading a massive .RData file
+usethis::use_blank_slate(scope = c("user", "project"))
+
+# Removes all items in Environment!
+rm(list = ls())
+ls()
+
+# Load packages
+pacman::p_load(tidyverse, seasonal, fpp2, readxl, devtools, feasts)
+
+# My ggplot's themes
+devtools::source_url("https://raw.githubusercontent.com/arifpras/themesAPS/main/themesAPS?raw=TRUE")
+
+options(tz = "Asia/Jakarta")
+
+# https://www.kaggle.com/code/brwalk/an-introduction-to-time-series-forecasting-in-r
+# https://www.mitchelloharawild.com/blog/feasts/
+```
+
+```{r working-dir, include=FALSE}
+setwd("~/Dropbox/01_Kemenkeu/2022_11/forecastingDemand")
+```
+
+```{r load}
+db01 <- read_excel(
+  "20221115_database.xlsx",
+  sheet = "db00",
+  col_types = c("date", "text", "text",
+                "numeric", "numeric", "text")
+)
+```
+
+```{r}
+db02 <- db01 %>% filter(Bid == "Incoming") %>% 
+  mutate(mnth = yearmonth(IssueDt)) %>% 
+  select(-IssueDt, -Series, -Nom10e5, -Bid) %>% 
+  relocate(mnth, CatgBidders) %>% 
+  group_by(mnth, CatgBidders) %>% 
+  summarise("TotalBid" = sum(Nom10e11, na.rm = TRUE)) %>% 
+  ungroup()
+
+(
+  plot01 <- db02 %>%
+    ggplot(aes(x = mnth, y = TotalBid)) +
+    geom_line(aes(color = CatgBidders, group = CatgBidders)) +
+    scale_fill_calc() + theme_linedraw() +
+    labs(x = "") +
+    guides(color = guide_legend("", nrow = 2, byrow = TRUE)) +
+    facet_wrap( ~ CatgBidders, nrow = 5) +
+    scale_y_continuous(labels = scales::number) +
+    theme(
+      plot.title = element_text(hjust = 0, size = 22, face = "bold"),
+      plot.subtitle = element_text(hjust = 0, size = 18),
+      plot.caption = element_text(hjust = 0, size = 16),
+      axis.title.y = element_text(size = 17),
+      axis.title.x = element_text(size = 17),
+      axis.text.y = element_text(size = 15),
+      axis.text.x = element_text(size = 15),
+      strip.text.x = element_text(size = 16),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      panel.ontop = FALSE,
+      legend.position = "none",
+      legend.text = element_text(size = 14),
+      plot.title.position = "plot",
+      plot.caption.position =  "plot",
+      plot.margin = margin(10, 10, 10, 10)
+    )
+)
+```
+
+```{r}
+db03 <-
+  db01 %>% filter(Bid == "Incoming" &
+                    !CatgBidders %in% c("BI") &
+                    IssueDt <= "2022-10-30") %>%
+  mutate(mnth = yearmonth(IssueDt)) %>%
+  group_by(mnth) %>%
+  summarise("TotalBid" = sum(Nom10e11)) %>%
+  ungroup() %>%
+  as_tsibble(index = mnth) %>%
+  relocate(mnth, TotalBid) %>% 
+  fill_gaps(.full = TRUE) %>% #Dec kadang tdk ada lelang
+  replace(is.na(.), 0) #Fill NA with 0
+```
+
+```{r tsibble}
+(plot02 <- db03 %>%
+   autoplot(.vars = TotalBid) +
+   theme_light() + theme_aps02 +
+   labs(x = ""))
+```
+
+```{r gg_season}
+(
+  plot03 <-
+    db03 %>% gg_season(TotalBid) + theme_light() + theme_aps02 +
+    labs(x = "") + theme(legend.position = "bottom")
+)
+```
+
+```{r}
+(plot03 <- db03 %>% gg_subseries(TotalBid) + theme_light() + theme_aps02 +
+    labs(x = "") + theme(legend.position = "bottom"))
+```
+
+```{r}
+(plot04 <- db03 %>% ACF(TotalBid) %>% autoplot() + theme_light() + theme_aps02 +
+    labs(x = "") + theme(legend.position = "bottom"))
+```
+
+```{r}
+(plot05 <-
+   db03 %>% gg_lag(TotalBid, geom = "point") + theme_light() + theme_aps02)
+```
+
+```{r}
+(plot06 <- db03 %>% gg_tsdisplay(TotalBid))
+```
+
+```{r}
+(
+  plot07 <-
+    db03 %>% model(STL(TotalBid)) %>% components() %>% autoplot() + theme_light() + theme_aps02
+)
+```
+
+```{r fit}
+# fit <- db02 %>% as_tsibble(index = mnth) %>% model(ETS(Bid10e11))
+# report(fit)
+# components(fit) %>% autoplot()  + theme_light() + theme_aps02
+
+(
+  plot08 <-
+    db03 %>% model(ETS(TotalBid)) %>% components() %>% autoplot() + theme_light() + theme_aps02
+)
+```
+
+```{r ets}
+# (plot09 <-
+#    autoplot(forecast::forecast(ets(
+#      ts(db02$Bid10e11, frequency = 12, start = 2009)
+#    ), h = 14, PI = FALSE)) +
+#    theme_light() + theme_aps02) + labs(x = "", y = "Bid10e11")
+
+(
+  plot10 <-
+    db03 %>% as_tsibble() %>% model(ETS(TotalBid)) %>% forecast(h = 14, PI = FALSE) %>% autoplot(db03) + theme_light() + theme_aps02 + labs(x = "")
+)
+
+(db03 <- db03 %>%
+    as_tsibble() %>%
+    model(ETS(TotalBid)) %>%
+    forecast(h = 14))
+```
+
+```{r}
+(
+  db04 <-
+    db03 %>% as_tibble() %>% select(mnth, .mean) %>% mutate(yr = year(mnth)) %>%
+    group_by(yr) %>% summarise(totl = sum(.mean)) %>% ungroup()
+)
+
+(
+  plot11 <-
+    db03 %>% as_tibble() %>% select(mnth, .mean) %>% mutate(yr = year(mnth)) %>%
+    ggplot(aes(x = factor(mnth), y = .mean)) +
+    geom_col(aes(fill = factor(yr)), alpha = 0.9) +
+    geom_text(
+      aes(
+        x = factor(mnth),
+        y = .mean,
+        label = round(.mean, 2)
+      ),
+      size = 3,
+      hjust = 1.5
+    ) +
+    scale_fill_manual(values = wes_palette("FantasticFox1", n = 2)) +
+    # scale_fill_viridis(discrete = TRUE, option = "C") +
+    # scale_fill_calc() +
+    theme_linedraw() +
+    labs(y = "",
+         x = "") +
+    theme(
+      legend.position = "none",
+      panel.grid.minor = element_blank(),
+      panel.grid.major.y = element_line(colour = "gray", linetype = "dotted"),
+      panel.grid.major.x = element_blank(),
+      panel.background = element_blank()
+    ) +
+    coord_flip() +
+    geom_textbox(aes(
+      x = "2023 Dec", y = 95,
+      label = "The ETS model forecasts the total demand for the conventional bonds\\' auctions in the next year is <span style='color:red;'>± IDR902.86 trillion.</span> "),
+      # stat = "unique",
+      size = 3,
+      width = unit(13, "lines"))
+)
+
+ggsave(
+  filename = "20221115_bidauctions_SUN.pdf",
+  plot = plot11,
+  #device = cairo_pdf,
+  width = 297,
+  height = 210,
+  units = "mm"
+)
+```
+
+```{r}
+
+```
+
