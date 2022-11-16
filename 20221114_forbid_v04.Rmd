@@ -1,0 +1,463 @@
+---
+title: "Forecasting Demand v.04"
+author: "Arif P. Sulistiono / @arifpras"
+date: "2022-11-16"
+output: html_document
+---
+
+```{r prerequisites, include=FALSE}
+# From {usethis} to avoid loading a massive .RData file
+usethis::use_blank_slate(scope = c("user", "project"))
+
+# Removes all items in Environment!
+rm(list = ls())
+ls()
+
+# Load packages
+pacman::p_load(tidyverse, seasonal, fpp2, readxl, devtools, feasts, qpdf, wesanderson, lubridate, zoo, tsibble)
+
+# My ggplot's themes
+devtools::source_url("https://raw.githubusercontent.com/arifpras/themesAPS/main/themesAPS?raw=TRUE")
+
+options(tz = "Asia/Jakarta")
+
+# https://www.kaggle.com/code/brwalk/an-introduction-to-time-series-forecasting-in-r
+# https://www.mitchelloharawild.com/blog/feasts/
+```
+
+```{r working-dir, include=FALSE}
+setwd("~/Dropbox/01_Kemenkeu/2022_11/forecastingDemand")
+```
+
+```{r load}
+db01 <- read_excel(
+  "20221115_database.xlsx",
+  sheet = "db00",
+  col_types = c("date", "text", "text", "text",
+                "numeric", "text")
+)
+
+db01$IssueDt <-
+  as.Date(db01$IssueDt, "%Y-%m-%d")
+```
+
+```{r noBI_onlyIncoming}
+# no Bank Indonesia
+# only incoming
+# from Oct. 2010 to Oct. 2022 (the first Sukuk issuance was Oct. 2010)
+
+db02 <- db01 %>% filter(Bid == "Incoming" & CatgBidders != "BI" & IssueDt > "2009-10-01" & IssueDt < "2022-11-01") %>% 
+  select(IssueDt, Series, Nom10e11) %>% 
+  group_by(IssueDt, Series) %>% 
+  summarise(TotalBid = sum(Nom10e11, na.rm = FALSE), .groups = "drop") %>% 
+  ungroup()
+```
+
+```{r eda_plotting}
+(
+  plot01 <- db02 %>% 
+    ggplot(aes(x = IssueDt, y = TotalBid)) +
+    geom_point(aes(color = Series)) +
+    # scale_color_manual(values = wes_palette("Darjeeling1", n = 2)) +
+    scale_color_manual(values = c("#006e90", "#f18f01")) +
+    theme_linedraw() +
+    labs(
+      title = "Total bid per issuance in the primary market",
+      subtitle = "Oct. 2009 to Oct. 2022; in IDR trillion",
+      x = "", y = "") +
+    guides(color = guide_legend("", nrow = 1, byrow = TRUE)) +
+    # facet_wrap( ~ CatgBidders, nrow = 5) +
+    scale_y_continuous(labels = scales::number) +
+    theme(
+      plot.title = element_text(hjust = 0, size = 22, face = "bold"),
+      plot.subtitle = element_text(hjust = 0, size = 18),
+      plot.caption = element_text(hjust = 0, size = 16),
+      axis.title.y = element_text(size = 17),
+      axis.title.x = element_text(size = 17),
+      axis.text.y = element_text(size = 15),
+      axis.text.x = element_text(size = 15),
+      strip.text.x = element_text(size = 16),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      panel.ontop = FALSE,
+      legend.position = "bottom",
+      legend.text = element_text(size = 14),
+      plot.title.position = "plot",
+      plot.caption.position =  "plot",
+      plot.margin = margin(10, 10, 10, 10)
+    )
+)
+```
+
+```{r avg_monthly}
+db03 <-
+  db02 %>% mutate("mnth" = yearmonth(IssueDt)) %>%
+  group_by(mnth) %>%
+  summarise(
+    "AvgBid" = mean(TotalBid, na.rm = TRUE),
+    "SumBid" = sum(TotalBid, na.rm = TRUE),
+    "FreqIssuance" = n()
+  ) %>%
+  ungroup()
+```
+
+```{r plot_industries}
+db04 <-
+  db01 %>% filter(Bid == "Incoming" &
+                    # CatgBidders != "BI" &
+                    IssueDt > "2009-10-01" & IssueDt < "2022-11-01") %>%
+  mutate(mnth = yearmonth(IssueDt)) %>%
+  select(-IssueDt,-Series,-Nom10e5,-Bid) %>%
+  relocate(mnth, CatgBidders) %>%
+  group_by(mnth, CatgBidders) %>%
+  summarise("TotalBid" = sum(Nom10e11, na.rm = TRUE)) %>%
+  ungroup()
+
+(
+  plot02 <- db04 %>%
+    ggplot(aes(x = mnth, y = TotalBid)) +
+    geom_line(aes(color = CatgBidders, group = CatgBidders)) +
+    ggthemes::scale_fill_calc() + theme_linedraw() +
+    labs(x = "") +
+    guides(color = guide_legend("", nrow = 2, byrow = TRUE)) +
+    facet_wrap(~ CatgBidders, nrow = 5, scales = "fixed") +
+    scale_y_continuous(labels = scales::number) +
+    theme(
+      plot.title = element_text(hjust = 0, size = 22, face = "bold"),
+      plot.subtitle = element_text(hjust = 0, size = 18),
+      plot.caption = element_text(hjust = 0, size = 16),
+      axis.title.y = element_text(size = 17),
+      axis.title.x = element_text(size = 17),
+      axis.text.y = element_text(size = 15),
+      axis.text.x = element_text(size = 15),
+      strip.text.x = element_text(size = 16),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      panel.ontop = FALSE,
+      legend.position = "none",
+      legend.text = element_text(size = 14),
+      plot.title.position = "plot",
+      plot.caption.position =  "plot",
+      plot.margin = margin(10, 10, 10, 10)
+    )
+)
+```
+
+```{r db03}
+db05 <-
+  db03 %>% select(mnth, AvgBid, SumBid) %>% 
+  as_tsibble(index = mnth) %>%
+  relocate(mnth, AvgBid) %>% 
+  fill_gaps(.full = TRUE) %>% #Dec kadang tdk ada lelang
+  replace(is.na(.), 0) %>% #Fill NA with 0
+  filter_index(~ "2022 Oct") # Max period of observation
+
+db06 <- db05 %>% 
+  pivot_longer(cols = 2:3, names_to = "var01", values_to = "val01")
+  
+```
+
+```{r tsibble}
+# db06$var01 <-
+#   factor(db06$var01,
+#          levels = c("SumBid",
+#                     "AvgBid"))
+
+(
+  plot03 <- db06 %>%
+    autoplot(.vars = val01) +
+    scale_color_manual(values = wes_palette("Darjeeling1", n = 2)) + 
+    theme_linedraw() +
+    labs(x = "") +
+    # guides(color = guide_legend("", nrow = 2, byrow = TRUE)) +
+    facet_wrap( ~ var01, nrow = 2, scales = "fixed") +
+    scale_y_continuous(labels = scales::number) +
+    theme(
+      plot.title = element_text(hjust = 0, size = 22, face = "bold"),
+      plot.subtitle = element_text(hjust = 0, size = 18),
+      plot.caption = element_text(hjust = 0, size = 16),
+      axis.title.y = element_text(size = 17),
+      axis.title.x = element_text(size = 17),
+      axis.text.y = element_text(size = 15),
+      axis.text.x = element_text(size = 15),
+      strip.text.x = element_text(size = 16),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      panel.ontop = FALSE,
+      legend.position = "none",
+      legend.text = element_text(size = 14),
+      plot.title.position = "plot",
+      plot.caption.position =  "plot",
+      plot.margin = margin(10, 10, 10, 10)
+    )
+)
+```
+
+```{r gg_season}
+(
+  plot04 <-
+    db05 %>% select(-SumBid) %>%
+    gg_season(AvgBid) + theme_light() + theme_aps02 +
+    labs(x = "") + theme(legend.position = "bottom")
+)
+```
+
+```{r gg_subseries}
+(
+  plot05 <-
+    db05 %>% select(-SumBid) %>% gg_subseries(AvgBid) + theme_light() + theme_aps02 +
+    labs(x = "") + theme(legend.position = "bottom")
+)
+```
+
+```{r acf}
+(
+  plot06 <-
+    db05 %>% select(-SumBid) %>% ACF(AvgBid) %>% autoplot() + theme_light() + theme_aps02 +
+    labs(x = "") + theme(legend.position = "bottom")
+)
+```
+
+```{r gg_lag}
+(
+  plot07 <-
+    db05 %>% select(-SumBid) %>% gg_lag(AvgBid, geom = "point") + theme_light() + theme_aps02
+)
+```
+
+```{r gg_tsdisplay}
+(plot08 <- db05 %>% select(-SumBid) %>% gg_tsdisplay(AvgBid))
+```
+
+```{r stl_decompose}
+(
+  plot09 <-
+    db05 %>% select(-SumBid) %>% model(STL(AvgBid)) %>% components() %>% autoplot() + theme_light() + theme_aps02
+)
+```
+
+```{r ets_decompose}
+# db05a <- db05 %>% select(-SumBid)
+# 
+# fit <- db05a %>% as_tsibble(index = mnth) %>% model(fable::ETS(AvgBid))
+# report(fit)
+# components(fit) %>% autoplot()  + theme_light() + theme_aps02
+
+(
+  plot10 <-
+    db05 %>% select(-SumBid) %>% model(fable::ETS(AvgBid)) %>% components() %>% autoplot() + theme_light() + theme_aps02
+)
+```
+
+```{r ets_forecast}
+# (plot09 <-
+#    autoplot(forecast::forecast(ets(
+#      ts(db02$Bid10e11, frequency = 12, start = 2009)
+#    ), h = 14, PI = FALSE)) +
+#    theme_light() + theme_aps02) + labs(x = "", y = "Bid10e11")
+
+(
+  plot11 <-
+    db05 %>% select(-SumBid) %>%  as_tsibble(index = mnth) %>% model(fable::ETS(AvgBid)) %>% forecast(h = 12, PI = FALSE) %>% autoplot(db03) + theme_light() + theme_aps02 + labs(x = "")
+)
+
+(
+  db07 <-
+    db05 %>% select(-SumBid) %>%  as_tsibble(index = mnth) %>% model(fable::ETS(AvgBid)) %>%
+    forecast(h = 12)
+)
+```
+
+```{r ets_plot}
+(
+  db08 <-
+    db07 %>% as_tibble() %>% select(mnth, .mean) %>% mutate(yr = year(mnth)) %>%
+    group_by(yr) %>% summarise(totl = sum(.mean)) %>% ungroup()
+)
+
+(
+  plot12 <-
+    db07 %>% as_tibble() %>% select(mnth, .mean) %>% mutate(yr = year(mnth)) %>%
+    ggplot(aes(x = factor(mnth), y = .mean)) +
+    geom_col(aes(fill = factor(yr)), alpha = 0.9) +
+    geom_text(
+      aes(
+        x = factor(mnth),
+        y = .mean,
+        label = round(.mean, 2)
+      ),
+      size = 3,
+      hjust = 1.5
+    ) +
+    scale_fill_manual(values = wes_palette("FantasticFox1", n = 2)) +
+    # scale_fill_viridis(discrete = TRUE, option = "C") +
+    # scale_fill_calc() +
+    theme_linedraw() +
+    labs(
+      title = "ETS",
+      y = "",
+      x = "") +
+    theme(
+      legend.position = "none",
+      panel.grid.minor = element_blank(),
+      panel.grid.major.y = element_line(colour = "gray", linetype = "dotted"),
+      panel.grid.major.x = element_blank(),
+      panel.background = element_blank()
+    ) +
+    # scale_y_continuous(limits = c(0, 115)) +
+    # geom_textbox(aes(
+    #   x = "2023 Dec", y = 100,
+    #   label = "The ETS model forecasts the total demand for the conventional bonds\\' auctions in 2023 is <span style='color:red;'>± IDR983.01 trillion.</span> "),
+    #   # stat = "unique",
+    #   size = 3,
+    #   width = unit(12, "lines")) +
+    coord_flip()
+    )
+
+# ggsave(
+#   filename = "20221116_avgbidauctions_SBN_ets.pdf",
+#   plot = plot12,
+#   #device = cairo_pdf,
+#   width = 297,
+#   height = 210,
+#   units = "mm"
+# )
+```
+
+```{r arima_forecast}
+(
+  plot13 <-
+    autoplot(forecast::forecast(
+      auto.arima(ts(
+        db05$AvgBid, frequency = 12, start = 2009
+      )), h = 12
+    )) +
+    theme_light() + theme_aps02 + labs(x = "", y = "TotalBid")
+)
+
+(db09 <- db05 %>% select(-SumBid) %>%  as_tsibble(index = mnth) %>%
+    model(fable::ARIMA(AvgBid)) %>%
+    forecast(h = 12))
+```
+
+```{r arima_plot}
+(
+  db10 <-
+    db09 %>% as_tibble() %>% select(mnth, .mean) %>% mutate(yr = year(mnth)) %>%
+    group_by(yr) %>% summarise(totl = sum(.mean)) %>% ungroup()
+)
+
+(
+  plot14 <-
+    db09 %>% as_tibble() %>% select(mnth, .mean) %>% mutate(yr = year(mnth)) %>%
+    ggplot(aes(x = factor(mnth), y = .mean)) +
+    geom_col(aes(fill = factor(yr)), alpha = 0.9) +
+    geom_text(
+      aes(
+        x = factor(mnth),
+        y = .mean,
+        label = round(.mean, 2)
+      ),
+      size = 3,
+      hjust = 1.5
+    ) +
+    scale_fill_manual(values = wes_palette("FantasticFox1", n = 2)) +
+    # scale_fill_viridis(discrete = TRUE, option = "C") +
+    # scale_fill_calc() +
+    theme_linedraw() +
+    labs(
+      title = "ARIMA",
+      y = "",
+      x = "") +
+    # geom_textbox(aes(
+    #   x = "2023 Dec", y = 100,
+    #   label = "The ARIMA model forecasts the total demand for the conventional bonds\\' auctions in 2023 is <span style='color:red;'>± IDR860.43 trillion.</span> "),
+    #   # stat = "unique",
+    #   size = 3,
+    #   width = unit(12, "lines")) +
+    theme(
+      legend.position = "none",
+      panel.grid.minor = element_blank(),
+      panel.grid.major.y = element_line(colour = "gray", linetype = "dotted"),
+      panel.grid.major.x = element_blank(),
+      panel.background = element_blank()
+    ) +
+    # scale_y_continuous(limits = c(0, 115)) +
+    coord_flip()
+    
+)
+
+# ggsave(
+#   filename = "20221116_avgbidauctions_SBN_arima.pdf",
+#   plot = plot14,
+#   #device = cairo_pdf,
+#   width = 297,
+#   height = 210,
+#   units = "mm"
+# )
+```
+
+```{r combine_pdf}
+# qpdf::pdf_combine(
+#   input = c(
+#     "20221116_avgbidauctions_SBN_ets.pdf",
+#     "20221116_avgbidauctions_SBN_arima.pdf"
+#   ),
+#   output = "20221116_avgbidauctions_SBN.pdf"
+# )
+```
+
+```{r multiple_pdf}
+pdf(
+  "20221116_avgbidauctions.pdf", width = 10, height = 7,  paper = "a4r"
+)
+plot01
+plot02
+plot03
+plot04
+plot05
+plot06
+plot07
+plot08
+plot09
+plot10
+plot11
+plot12
+plot13
+plot14
+dev.off()
+```
+
+```{r freq_rata2lelang}
+db07a <-
+  db07 %>% as_tibble() %>% select(mnth, .mean) %>% mutate(mnthb = month(mnth)) %>% select(-mnth) %>% rename("forbid_ets" = ".mean")
+
+db09a <-
+  db09 %>% as_tibble() %>% select(mnth, .mean) %>% mutate(mnthb = month(mnth)) %>% select(-mnth) %>% rename("forbid_arima" = ".mean")
+
+db11 <- db02 %>% mutate(mnthb = lubridate::month(IssueDt), yearb = year(IssueDt)) %>%
+  mutate(frq = 1) %>% 
+  group_by(yearb, mnthb) %>% 
+  summarise(cnt = n()) %>% 
+  ungroup() %>% 
+  group_by(mnthb) %>% 
+  summarise(AvgFreq = round(mean(cnt),0)) %>% 
+  ungroup() %>% 
+  left_join(db07a, by = "mnthb") %>% 
+  left_join(db09a, by = "mnthb") %>% 
+  mutate(
+    "forbid_ets_total" = forbid_ets * AvgFreq,
+    "forbid_arima_total" = forbid_arima * AvgFreq,
+  )
+
+sum(db11$forbid_ets_total)
+sum(db11$forbid_arima_total)
+```
+
+
+```{r clearing}
+# Removes all items in Environment!
+rm(list = ls())
+ls()
+```
+
