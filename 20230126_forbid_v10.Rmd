@@ -1,5 +1,5 @@
 ---
-title: "Forecasting Demand v.07"
+title: "Forecasting Demand v.10"
 author: "Arif P. Sulistiono / @arifpras"
 date: "2023-01-26"
 output: html_document
@@ -35,7 +35,7 @@ setwd("~/Dropbox/01_Kemenkeu/2022_11/forecastingDemand")
 ```
 
 ```{r load}
-db01 <- read_csv("~/Dropbox/01_Kemenkeu/2022_11/forecastingDemand/20230126_database.csv", show_col_types = FALSE)
+db01 <- read_csv("~/Dropbox/01_Kemenkeu/2022_11/forecastingDemand/20230127_database.csv", show_col_types = FALSE)
 
 db01$month <-
   as.Date(db01$month, "%Y-%m-%d")
@@ -44,13 +44,13 @@ summary(db01)
 ```
 
 ```{r}
-db02 <- ts(db01[,2:7], start = c(2012, 1), end = c(2022, 6), frequency = 12)
+db02 <- ts(db01[,2:3], start = c(2012, 1), end = c(2022, 12), frequency = 12)
 summary(db02)
 ```
 
 ```{r}
 # subset the data 
-db03 <- db02[,c(1,5)]
+db03 <- db02[,c(1,2)]
 
 # plot the data
 autoplot(db03, facets=TRUE) +
@@ -90,7 +90,7 @@ incomingbidsun_arimax = auto.arima(
   approximation = FALSE
 )
 
-# Best model: Regression with ARIMA(2,1,2)            errors
+# Best model: Regression with ARIMA(0,1,1)            errors
 ```
 
 ```{r}
@@ -121,7 +121,7 @@ incomingbidsun_sarimax = auto.arima(
   approximation = FALSE
 )
 
-# Best model: Regression with ARIMA(2,1,1)(2,0,0)[12] errors
+# Best model: Regression with ARIMA(0,1,1)            errors 
 ```
 
 ```{r}
@@ -147,12 +147,12 @@ db05 <-
     db03,
     frequency = 12,
     start = c(2012, 1),
-    end = c(2022, 6)
+    end = c(2022, 12)
   )
 
 # split the data into train and test sets
-db05_train <- window(db05, end = c(2021, 12))
-db05_test <- window(db05, start = c(2022, 1))
+db05_train <- window(db05, end = c(2022, 6))
+db05_test <- window(db05, start = c(2022, 7))
 
 # retrain model only on train data
 incomingbidsun_arimax2 = auto.arima(
@@ -173,7 +173,7 @@ forecast_arimax <-
   forecast::forecast(incomingbidsun_arimax2, xreg = rep(db05_test[, "incoming_bid_avg_sun"], 6))
 
 ## plot the forecasts
-autoplot(forecast_arimax) + autolayer(db05[, "incoming_bid_avg_sun"]) + theme(legend.position = "bottom") + xlim(2012, 2022.5)
+autoplot(forecast_arimax) + autolayer(db05[, "incoming_bid_avg_sun"]) + theme(legend.position = "bottom") + xlim(2012, 2023)
 ```
 
 ```{r}
@@ -183,12 +183,12 @@ db05 <-
     db03,
     frequency = 12,
     start = c(2012, 1),
-    end = c(2022, 6)
+    end = c(2022, 12)
   )
 
 # split the data into train and test sets
-db05_train <- window(db05, end = c(2021, 12))
-db05_test <- window(db05, start = c(2022, 1))
+db05_train <- window(db05, end = c(2022, 6))
+db05_test <- window(db05, start = c(2022, 7))
 
 # retrain model only on train data
 incomingbidsun_sarimax2 = auto.arima(
@@ -209,7 +209,7 @@ forecast_sarimax <-
   forecast::forecast(incomingbidsun_sarimax2, xreg = rep(db05_test[, "incoming_bid_avg_sun"], 6))
 
 ## plot the forecasts
-autoplot(forecast_sarimax) + autolayer(db05[, "incoming_bid_avg_sun"]) + theme(legend.position = "bottom") + xlim(2012, 2022.5)
+autoplot(forecast_sarimax) + autolayer(db05[, "incoming_bid_avg_sun"]) + theme(legend.position = "bottom") + xlim(2012, 2023)
 ```
 
 ```{r}
