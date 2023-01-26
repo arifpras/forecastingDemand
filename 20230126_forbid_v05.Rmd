@@ -1,0 +1,37 @@
+---
+title: "Forecasting Demand v.05"
+author: "Arif P. Sulistiono / @arifpras"
+date: "2023-01-26"
+output: html_document
+---
+
+```{r prerequisites, include=FALSE}
+# From {usethis} to avoid loading a massive .RData file
+usethis::use_blank_slate(scope = c("user", "project"))
+
+# Removes all items in Environment!
+rm(list = ls())
+ls()
+
+# Load packages
+pacman::p_load(tidyverse, seasonal, fpp2, readxl, devtools, feasts, qpdf, wesanderson, lubridate, zoo, tsibble)
+
+# My ggplot's themes
+devtools::source_url("https://raw.githubusercontent.com/arifpras/themesAPS/main/themesAPS?raw=TRUE")
+
+options(tz = "Asia/Jakarta")
+
+# https://www.kaggle.com/code/brwalk/an-introduction-to-time-series-forecasting-in-r
+# https://www.mitchelloharawild.com/blog/feasts/
+```
+
+```{r working-dir, include=FALSE}
+setwd("~/Dropbox/01_Kemenkeu/2022_11/forecastingDemand")
+```
+
+```{r load}
+db01 <- read_csv("~/Dropbox/01_Kemenkeu/2022_11/forecastingDemand/20230126_database.csv", show_col_types = FALSE)
+
+db01$month <-
+  as.Date(db01$month, "%Y-%m-%d")
+```
