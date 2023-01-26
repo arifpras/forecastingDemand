@@ -1,5 +1,5 @@
 ---
-title: "Forecasting Demand v.05"
+title: "Forecasting Demand v.08"
 author: "Arif P. Sulistiono / @arifpras"
 date: "2023-01-26"
 output: html_document
@@ -44,24 +44,28 @@ summary(db01)
 ```
 
 ```{r}
-db02 <- ts(db01[,2:7], start = c(2012, 1), end = c(2022, 6), frequency = 12)
-summary(db02)
+db01$features <- array(c(db01$dpk_bankumum, db01$dv_bankindonesia, db01$vix_index), dim = c(126, 3, 1))
+
+print(db01$features)
+
+# db02 <- ts(db01[,2:8], start = c(2012, 1), end = c(2022, 6), frequency = 12)
+# summary(db02)
 ```
 
 ```{r}
 # subset the data 
-db03 <- db02[,c(1,3)]
+db03 <- db01[,c(2,8)]
 
 # plot the data
-autoplot(db03, facets=TRUE) +
-  xlab("") + ylab("") +
-  ggtitle("Incoming bid and third party funds")
+# autoplot(db03, facets=TRUE) +
+#   xlab("") + ylab("") +
+#   ggtitle("Incoming bid and the exogeneous variables")
   
 # plot the ACF
-ggAcf(db03)
+# ggAcf(db03)
 
 # plot the ACF
-ggPacf(db03)
+# ggPacf(db03)
 ```
 
 ```{r decomposition_bid_sun}
@@ -72,17 +76,17 @@ autoplot(db04_bidsun_stl)
 ```
 
 ```{r}
-# fit a Classical decomposition model for DPK
-db04_dpk = db03[, "dpk_bankumum"] %>% ts(., frequency = 12) # freq = 12 months
-db04_dpk_stl = stl(db04_dpk, s.window = "periodic")
-autoplot(db04_dpk_stl)
+# fit a Classical decomposition model for Bloomberg financial stability index
+db04_bberg = db03[, "bfcius_bberg"] %>% ts(., frequency = 12) # freq = 12 months
+db04_bberg_stl = stl(db04_bberg, s.window = "periodic")
+autoplot(db04_bberg_stl)
 ```
 
 ```{r include=FALSE}
 incomingbidsun_arimax = auto.arima(
   db03[, "incoming_bid_avg_sun"],
   # specify main trend
-  xreg = db03[, "dpk_bankumum"],
+  xreg = db03[, "features"],
   # specify exogenous variables here
   trace = TRUE,
   seasonal = FALSE,
@@ -90,7 +94,7 @@ incomingbidsun_arimax = auto.arima(
   approximation = FALSE
 )
 
-# Best model: Regression with ARIMA(2,0,3)            errors
+# Best model: Regression with ARIMA(1,1,3)            errors
 ```
 
 ```{r}
@@ -113,7 +117,7 @@ test(resid(incomingbidsun_arimax))
 incomingbidsun_sarimax = auto.arima(
   db03[, "incoming_bid_avg_sun"],
   # specify main trend
-  xreg = db03[, "dpk_bankumum"],
+  xreg = db03[, "bfcius_bberg"],
   # specify exogenous variables here
   trace = TRUE,
   seasonal = TRUE, # allow a SARIMAX model
@@ -121,7 +125,7 @@ incomingbidsun_sarimax = auto.arima(
   approximation = FALSE
 )
 
-# Best model: Regression with ARIMA(3,0,1)(1,0,0)[12] errors 
+# Best model: Regression with ARIMA(2,1,1)(2,0,0)[12] errors
 ```
 
 ```{r}
@@ -158,7 +162,7 @@ db05_test <- window(db05, start = c(2022, 1))
 incomingbidsun_arimax2 = auto.arima(
   db05_train[, "incoming_bid_avg_sun"],
   # specify main trend
-  xreg = db05_train[, "dpk_bankumum"],
+  xreg = db05_train[, "bfcius_bberg"],
   # specify exogenous variables here
   trace = FALSE,
   # do not show iffted models
@@ -194,7 +198,7 @@ db05_test <- window(db05, start = c(2022, 1))
 incomingbidsun_sarimax2 = auto.arima(
   db05_train[, "incoming_bid_avg_sun"],
   # specify main trend
-  xreg = db05_train[, "dpk_bankumum"],
+  xreg = db05_train[, "bfcius_bberg"],
   # specify exogenous variables here
   trace = FALSE,
   # do not show iffted models
