@@ -7,5 +7,7 @@ This repository will be used to forecast Indonesian's government bonds' demands 
 Some useful links:
 - An Introduction to Time Series Forecasting in R: https://www.kaggle.com/code/brwalk/an-introduction-to-time-series-forecasting-in-r
 - Forecasting: Principles and Practice: https://otexts.com/fpp3/
+- Skforecast: time series forecasting with Python and Scikit-learn: https://www.cienciadedatos.net/documentos/py27-time-series-forecasting-python-scikitlearn.html
+- Recursive multi-step forecasting with exogenous variables: https://joaquinamatrodrigo.github.io/skforecast/0.6.0/user_guides/autoregresive-forecaster-exogenous.html
 
-It is managed by Arif P. Sulistiono and Dea A. Editya, two government officers in Indonesia's Ministry of Finance, who want to develop they knowledge in R continously.
+It is managed by Arif P. Sulistiono and Dea A. Editya, two government officers in Indonesia's Ministry of Finance, who want to develop they knowledge in R and Python continously.
